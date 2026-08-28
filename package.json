@@ -1,0 +1,11 @@
+{
+  "name": "webapp-ra-soat-xa-phuong",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public --compatibility-date=2024-09-01"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}
