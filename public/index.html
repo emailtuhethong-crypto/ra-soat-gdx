@@ -1,1 +1,432 @@
 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rà soát dữ liệu xã phường</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --ink: #1b2430;
+    --ink-soft: #5b6675;
+    --paper: #f6f7f9;
+    --line: #dde1e7;
+    --accent: #2f5d8a;
+    --accent-soft: #e8eef5;
+    --good: #2a7a4f;
+    --good-soft: #e6f4ec;
+    --bad: #b23b3b;
+    --bad-soft: #fbeaea;
+    --radius: 6px;
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    white-space: nowrap;
+  }
+  select, input[type="text"] {
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    background: #fff;
+    color: var(--ink);
+  }
+  select:focus, input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+  #unitSelect { min-width: 240px; }
+  .btn {
+    font: inherit;
+    font-weight: 600;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    padding: 7px 14px;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn:hover { background: #274d73; }
+  .btn:disabled { background: #b7c2ce; cursor: not-allowed; }
+  .btn.secondary {
+    background: #fff;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .btn.secondary:hover { background: var(--accent-soft); }
+  main { padding: 20px 24px 60px; }
+  .status-bar {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+    min-height: 18px;
+  }
+  .table-wrap {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: auto;
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 1100px; }
+  th, td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #fbfbfc;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ink-soft);
+    position: sticky;
+    top: 0;
+  }
+  td.locked { color: var(--ink-soft); background: #fbfbfc; white-space: nowrap; }
+  td input[type="text"] { width: 100%; min-width: 120px; }
+  td input.invalid { border-color: var(--bad); background: var(--bad-soft); }
+  .row-actions { white-space: nowrap; }
+  .save-btn {
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--accent);
+    background: #fff;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .save-btn:hover { background: var(--accent-soft); }
+  .save-btn[data-state="saving"] { opacity: 0.6; cursor: wait; }
+  .row-note { font-size: 12px; margin-top: 4px; }
+  .row-note.ok { color: var(--good); }
+  .row-note.err { color: var(--bad); }
+  .field-err { font-size: 11px; color: var(--bad); margin-top: 2px; }
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ink-soft);
+  }
+  #importReport {
+    margin-top: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 14px 16px;
+    display: none;
+  }
+  #importReport h3 { margin: 0 0 8px; font-size: 14px; }
+  .report-line { font-size: 13px; margin: 3px 0; }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    margin-right: 6px;
+  }
+  .tag.good { background: var(--good-soft); color: var(--good); }
+  .tag.bad { background: var(--bad-soft); color: var(--bad); }
+  .code-list { font-size: 12px; color: var(--ink-soft); word-break: break-all; }
+  #fileInput { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rà soát dữ liệu xã phường</h1>
+  <select id="unitSelect">
+    <option value="">— Chọn đơn vị —</option>
+  </select>
+  <button class="btn secondary" id="importBtn" disabled>Import Excel</button>
+  <input type="file" id="fileInput" accept=".xlsx,.xls" />
+  <span class="status-bar" id="statusBar" style="margin:0;"></span>
+</header>
+
+<main>
+  <div id="importReport"></div>
+  <div class="table-wrap">
+    <table id="dataTable" hidden>
+      <thead><tr id="tableHead"></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState">Chọn một đơn vị để xem dữ liệu.</div>
+  </div>
+</main>
+
+<script>
+const state = { unit: null, columns: [], lockedColumns: [], editableColumns: {}, matchColumn: "D", rows: [] };
+
+const unitSelect = document.getElementById("unitSelect");
+const statusBar = document.getElementById("statusBar");
+const table = document.getElementById("dataTable");
+const tableHead = document.getElementById("tableHead");
+const tableBody = document.getElementById("tableBody");
+const emptyState = document.getElementById("emptyState");
+const importBtn = document.getElementById("importBtn");
+const fileInput = document.getElementById("fileInput");
+const importReport = document.getElementById("importReport");
+
+function setStatus(msg) { statusBar.textContent = msg || ""; }
+
+async function loadUnits() {
+  setStatus("Đang tải danh sách đơn vị...");
+  try {
+    const res = await fetch("/api/units");
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    data.units.forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      unitSelect.appendChild(opt);
+    });
+    setStatus("");
+  } catch (err) {
+    setStatus("Lỗi tải danh sách đơn vị: " + err.message);
+  }
+}
+
+async function loadData(unit) {
+  setStatus("Đang tải dữ liệu của " + unit + " ...");
+  importReport.style.display = "none";
+  try {
+    const res = await fetch("/api/data?unit=" + encodeURIComponent(unit));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    state.unit = unit;
+    state.columns = data.columns;
+    state.lockedColumns = data.lockedColumns;
+    state.editableColumns = data.editableColumns;
+    state.matchColumn = data.matchColumn;
+    state.rows = data.rows;
+    renderTable(data.header);
+    importBtn.disabled = false;
+    setStatus(`Đã tải ${data.rows.length} dòng.`);
+  } catch (err) {
+    setStatus("Lỗi tải dữ liệu: " + err.message);
+  }
+}
+
+function renderTable(header) {
+  tableHead.innerHTML = "";
+  tableBody.innerHTML = "";
+
+  state.columns.forEach((col, i) => {
+    const th = document.createElement("th");
+    th.textContent = header[i] || col;
+    tableHead.appendChild(th);
+  });
+  const thAction = document.createElement("th");
+  thAction.textContent = "Thao tác";
+  tableHead.appendChild(thAction);
+
+  state.rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.dataset.code = row[state.matchColumn];
+
+    state.columns.forEach((col) => {
+      const td = document.createElement("td");
+      if (state.lockedColumns.includes(col)) {
+        td.className = "locked";
+        td.textContent = row[col];
+      } else {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = row[col] ?? "";
+        input.dataset.col = col;
+        td.appendChild(input);
+        const err = document.createElement("div");
+        err.className = "field-err";
+        td.appendChild(err);
+      }
+      tr.appendChild(td);
+    });
+
+    const tdAction = document.createElement("td");
+    tdAction.className = "row-actions";
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "save-btn";
+    saveBtn.textContent = "Lưu";
+    saveBtn.onclick = () => saveRow(tr, saveBtn);
+    tdAction.appendChild(saveBtn);
+    const note = document.createElement("div");
+    note.className = "row-note";
+    tdAction.appendChild(note);
+    tr.appendChild(tdAction);
+
+    tableBody.appendChild(tr);
+  });
+
+  table.hidden = false;
+  emptyState.hidden = true;
+}
+
+function validateField(col, value) {
+  const rule = state.editableColumns[col];
+  if (!rule) return null;
+  const v = (value || "").trim();
+  if (rule.required && v === "") return `${rule.label} là bắt buộc`;
+  if (v === "") return null;
+  if (rule.type === "code8" && !/^\d{8}$/.test(v)) return "Phải là đúng 8 chữ số";
+  if (rule.type === "text" && rule.maxLength && v.length > rule.maxLength) return "Quá dài";
+  return null;
+}
+
+async function saveRow(tr, btn) {
+  const inputs = tr.querySelectorAll("input[data-col]");
+  const fields = {};
+  let hasError = false;
+
+  inputs.forEach((input) => {
+    const col = input.dataset.col;
+    const errDiv = input.nextElementSibling;
+    const errMsg = validateField(col, input.value);
+    fields[col] = input.value;
+    if (errMsg) {
+      input.classList.add("invalid");
+      errDiv.textContent = errMsg;
+      hasError = true;
+    } else {
+      input.classList.remove("invalid");
+      errDiv.textContent = "";
+    }
+  });
+
+  const note = tr.querySelector(".row-note");
+  if (hasError) {
+    note.className = "row-note err";
+    note.textContent = "Sửa lỗi trước khi lưu";
+    return;
+  }
+
+  btn.dataset.state = "saving";
+  btn.disabled = true;
+  note.className = "row-note";
+  note.textContent = "Đang lưu...";
+
+  try {
+    const res = await fetch("/api/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unit: state.unit, code: tr.dataset.code, fields }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "Lỗi không xác định");
+    note.className = "row-note ok";
+    note.textContent = "Đã lưu";
+  } catch (err) {
+    note.className = "row-note err";
+    note.textContent = "Lỗi: " + err.message;
+  } finally {
+    btn.disabled = false;
+    delete btn.dataset.state;
+  }
+}
+
+unitSelect.addEventListener("change", () => {
+  if (unitSelect.value) loadData(unitSelect.value);
+});
+
+importBtn.addEventListener("click", () => fileInput.click());
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files[0];
+  fileInput.value = "";
+  if (!file || !state.unit) return;
+
+  setStatus("Đang đọc file Excel...");
+  try {
+    const buf = await file.arrayBuffer();
+    // cellText giữ nguyên chuỗi số 0 đầu nếu cột định dạng text trong file nguồn
+    const wb = XLSX.read(buf, { type: "array", cellText: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+
+    const header = raw[0].map((h) => String(h).trim());
+
+    // Xác định cột theo tên header. Có 2 cột trùng tên "Mã HRM" (H và J) -> xác định theo thứ tự xuất hiện.
+    const idx = {
+      D: header.findIndex((h) => h.includes("Mã xã")),
+      G: header.findIndex((h) => h.includes("Trưởng đại diện")),
+      H: -1,
+      I: header.findIndex((h) => h.includes("Giám đốc")),
+      J: -1,
+      K: header.findIndex((h) => h.includes("Ghi chú")),
+    };
+    const hrmIndexes = header.reduce((acc, h, i) => (h.includes("Mã HRM") ? [...acc, i] : acc), []);
+    idx.H = hrmIndexes[0] ?? -1;
+    idx.J = hrmIndexes[1] ?? -1;
+
+    if (idx.D === -1) throw new Error("Không tìm thấy cột 'Mã xã mới' trong file import");
+
+    const rows = raw.slice(1)
+      .filter((r) => r.some((c) => String(c).trim() !== ""))
+      .map((r) => ({
+        code: idx.D > -1 ? r[idx.D] : "",
+        G: idx.G > -1 ? r[idx.G] : "",
+        H: idx.H > -1 ? r[idx.H] : "",
+        I: idx.I > -1 ? r[idx.I] : "",
+        J: idx.J > -1 ? r[idx.J] : "",
+        K: idx.K > -1 ? r[idx.K] : "",
+      }));
+
+    setStatus(`Đang import ${rows.length} dòng vào ${state.unit}...`);
+
+    const res = await fetch("/api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unit: state.unit, rows }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "Lỗi không xác định");
+
+    showImportReport(data);
+    setStatus("Import xong. Đang tải lại dữ liệu...");
+    await loadData(state.unit);
+  } catch (err) {
+    setStatus("Lỗi import: " + err.message);
+  }
+});
+
+function showImportReport(data) {
+  importReport.style.display = "block";
+  importReport.innerHTML = `
+    <h3>Kết quả import — ${data.unit}</h3>
+    <div class="report-line"><span class="tag good">${data.updatedCount}</span> dòng đã cập nhật thành công</div>
+    ${data.notFoundCount ? `<div class="report-line"><span class="tag bad">${data.notFoundCount}</span> mã không tìm thấy trong đơn vị này<div class="code-list">${data.notFound.join(", ")}</div></div>` : ""}
+    ${data.invalidCount ? `<div class="report-line"><span class="tag bad">${data.invalidCount}</span> dòng sai định dạng<div class="code-list">${data.invalid.map((x) => x.code + ": " + Object.values(x.errors).join("; ")).join(" | ")}</div></div>` : ""}
+  `;
+}
+
+loadUnits();
+</script>
+</body>
+</html>
